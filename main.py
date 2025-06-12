@@ -1,11 +1,10 @@
 
 import asyncio
+import requests
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from datetime import datetime
-import pytz
 import os
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -13,6 +12,7 @@ bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher()
 scheduler = AsyncIOScheduler(timezone="Europe/Minsk")
 
+API_KEY = "213b82a5c829440ab5c0f0bc8ea2f1d6"
 CHAT_IDS_FILE = "chat_ids.txt"
 
 def add_chat_id(chat_id: int):
@@ -33,17 +33,37 @@ def get_chat_ids():
     except FileNotFoundError:
         return []
 
-def get_news_text() -> str:
-    return (
-        "🗞 <b>Новости за сегодня</b>\n\n"
-        "<b>🌍 Международные</b>\n• 1\n• 2\n• 3\n• 4\n• 5\n\n"
-        "<b>🇷🇺 Россия</b>\n• 1\n• 2\n• 3\n• 4\n• 5\n\n"
-        "<b>💰 Финансы</b>\n• 1\n• 2\n• 3\n• 4\n• 5\n\n"
-        "<b>📱 Технологии</b>\n• 1\n• 2\n• 3\n• 4\n• 5\n\n"
-        "<b>🧠 ИИ</b>\n• 1\n• 2\n• 3\n• 4\n• 5\n\n"
-        "<b>🤖 Роботы</b>\n• 1\n• 2\n• 3\n• 4\n• 5\n\n"
-        "<b>⚔️ Военная обстановка</b>\n• 1\n• 2\n• 3\n• 4\n• 5"
+def fetch_news_by_query(query, count=5):
+    url = (
+        f"https://newsapi.org/v2/everything?"
+        f"q={query}&sortBy=publishedAt&language=ru&apiKey={API_KEY}&pageSize={count}"
     )
+    try:
+        response = requests.get(url).json()
+        articles = response.get("articles", [])
+        if not articles:
+            return ["• Новости не найдены"]
+        return [f"• {a['title']}" for a in articles]
+    except Exception as e:
+        print(f"Ошибка при получении новостей: {e}")
+        return ["• Ошибка при загрузке"]
+
+def get_news_text():
+    queries = {
+        "🌍 Международные": "мир новости",
+        "🇷🇺 Россия": "Россия",
+        "💰 Финансы": "финансовые новости",
+        "📱 Технологии": "технологии",
+        "🧠 ИИ": "искусственный интеллект",
+        "🤖 Роботы": "робототехника",
+        "⚔️ Военная обстановка": "Украина война"
+    }
+
+    text = "🗞 <b>Новости за сегодня</b>\n\n"
+    for title, query in queries.items():
+        news_items = fetch_news_by_query(query)
+        text += f"<b>{title}</b>\n" + "\n".join(news_items) + "\n\n"
+    return text.strip()
 
 @dp.message(lambda message: message.text == "/start")
 async def start(message: Message):
@@ -82,4 +102,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
