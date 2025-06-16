@@ -1,7 +1,7 @@
-
 import asyncio
 import requests
-from aiogram import Bot, Dispatcher, types
+from datetime import datetime, timedelta
+from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -14,6 +14,13 @@ scheduler = AsyncIOScheduler(timezone="Europe/Minsk")
 
 API_KEY = "213b82a5c829440ab5c0f0bc8ea2f1d6"
 CHAT_IDS_FILE = "chat_ids.txt"
+
+# 📌 Кнопка "Новости сейчас"
+news_button = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text="🕒 Новости сейчас", callback_data="news_now")]
+    ]
+)
 
 def add_chat_id(chat_id: int):
     try:
@@ -34,9 +41,10 @@ def get_chat_ids():
         return []
 
 def fetch_news_by_query(query, count=5):
+    date_from = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
     url = (
         f"https://newsapi.org/v2/everything?"
-        f"q={query}&sortBy=publishedAt&language=ru&apiKey={API_KEY}&pageSize={count}"
+        f"q={query}&from={date_from}&sortBy=publishedAt&language=ru&apiKey={API_KEY}&pageSize={count}"
     )
     try:
         response = requests.get(url).json()
@@ -59,7 +67,7 @@ def get_news_text():
         "⚔️ Военная обстановка": "Украина война"
     }
 
-    text = "🗞 <b>Новости за сегодня</b>\n\n"
+    text = "🗞 <b>Новости за последние 24 часа</b>\n\n"
     for title, query in queries.items():
         news_items = fetch_news_by_query(query)
         text += f"<b>{title}</b>\n" + "\n".join(news_items) + "\n\n"
@@ -68,27 +76,22 @@ def get_news_text():
 @dp.message(lambda message: message.text == "/start")
 async def start(message: Message):
     add_chat_id(message.chat.id)
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🕒 Новости сейчас", callback_data="news_now")]
-        ]
-    )
     await message.answer(
         "✅ Бот активен. Новости будут приходить каждый день в 23:59.\n\n"
-        "А если хочешь — нажми кнопку ниже:",
-        reply_markup=keyboard
+        "А если хочешь — нажимай кнопку ниже в любое время:",
+        reply_markup=news_button
     )
 
 @dp.callback_query(lambda c: c.data == "news_now")
 async def handle_news_now(callback_query: CallbackQuery):
-    await callback_query.message.answer(get_news_text(), parse_mode="HTML")
+    await callback_query.message.answer(get_news_text(), parse_mode="HTML", reply_markup=news_button)
     await callback_query.answer()
 
 async def send_news():
     text = get_news_text()
     for chat_id in get_chat_ids():
         try:
-            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=news_button)
         except Exception as e:
             print(f"Ошибка отправки в чат {chat_id}: {e}")
 
